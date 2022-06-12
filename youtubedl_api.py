@@ -126,10 +126,23 @@ class YoutubeDLAPI:
 			print(f"Skipping {video_author} - {video_title} ({video_url}): Already exists")
 			return save_path
 
-		# Create new options with the save path template
+		# Create a progress bar for just this file
+		pbar = tqdm(
+			unit="iB",
+			unit_scale=True,
+			unit_divisor=1024,
+			leave=False)
+		def callback(d):
+			if d["status"] == "downloading":
+				pbar.total = d["total_bytes"]
+				pbar.n = d["downloaded_bytes"]
+				pbar.refresh()
+
+
+		# Create new options with the save path template, and callback
 		options = dict(
 			self.downloader_options,
-			**{"outtmpl": save_path})
+			**{"outtmpl": save_path, "progress_hooks": [callback]})
 
 		# Try downloading video!
 		try:
@@ -142,4 +155,5 @@ class YoutubeDLAPI:
 			self.error_msgs.append(error_msg)
 			return None
 
+		pbar.close()
 		return save_path
