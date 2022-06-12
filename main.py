@@ -1,5 +1,6 @@
 
 from config import Config
+from s3_uploader import S3Uploader
 from youtube_api import YoutubeAPI
 from youtubedl_api import YoutubeDLAPI
 
@@ -34,14 +35,22 @@ class PlaylistDownloader:
 
 
 
-
+# Set up APIs
 youtube_api = YoutubeAPI(Config.YOUTUBE_API_KEY)
 youtubedl_api = YoutubeDLAPI("downloaded_videos")
 
-
+# Download this playlist
 playlist_tag = "PLC4pl84M6cN1JrVEtWTTIVUmgJl52Ql4h"
 downloader = PlaylistDownloader(youtube_api, youtubedl_api)
 filepaths = downloader.download_playlist(playlist_tag)
 
-
-print(filepaths)
+# Upload the playlist to S3
+uploader = S3Uploader()
+uploader.add_files(filepaths)
+uploader.set_credentials(
+	aws_access_key=Config.AWS_ACCESS_KEY,
+	aws_secret_key=Config.AWS_SECRET_KEY)
+uploader.upload(
+	bucket_name=Config.S3_BUCKET_NAME,
+	bucket_directory=Config.S3_STORE_PATH,
+	s3_region_name=Config.S3_REGION_NAME)
