@@ -1,6 +1,8 @@
 
-import queue
+import moviepy.editor
+import os
 import os.path
+import queue
 import youtube_dl
 from tqdm import tqdm
 
@@ -49,19 +51,14 @@ class VideoQueue:
 
 class YoutubeDLAPI:
 
-	def __init__(self, target_dir, codec="mp3", quality="5"):
+	def __init__(self, target_dir):
 		self.target_dir = target_dir
-		self.codec = codec
 
 		# Config for downloader
 		self.downloader_options = {
 			"quiet": True, # Don't show cmdline output
-			"format": "bestaudio/best",
-			"postprocessors": [{
-				"key": "FFmpegExtractAudio",
-				"preferredcodec": codec,
-				"preferredquality": quality
-			}]}
+			"format": "mp4"
+		}
 
 		# Videos to still download
 		self.video_queue = VideoQueue()
@@ -96,7 +93,7 @@ class YoutubeDLAPI:
 
 			item = self.video_queue.get()
 			while item != None:
-				filepath = self._download_audio(item)
+				filepath = self._get_audio(item)
 
 				if filepath is not None:
 					filepaths.append(filepath)
@@ -112,19 +109,46 @@ class YoutubeDLAPI:
 		return filepaths
 
 
-	def _download_audio(self, item: VideoQueueItem) -> str:
+	def _get_audio(self, item: VideoQueueItem) -> str:
 		video_author = item.video_author
 		video_title  = item.video_title
 		video_url    = item.video_url
 
-		# Construct filepath
-		filename = f"{video_author} - {video_title}.{self.codec}"
-		save_path = os.path.join(self.target_dir, filename)
+		# Construct filepaths
+		video_filename = f"{video_author} - {video_title}.mp4"
+		audio_filename = f"{video_author} - {video_title}.mp3"
+		video_save_path = os.path.join(self.target_dir, video_filename)
+		audio_save_path = os.path.join(self.target_dir, audio_filename)
 
-		# Check if the file already exists
-		if os.path.exists(save_path):
+		# If the mp3 file already exists, just return path of that
+		if os.path.exists(audio_save_path):
 			print(f"Skipping {video_author} - {video_title} ({video_url}): Already exists")
-			return save_path
+			return audio_save_path
+
+		# If the video doesn't exist, download that
+		if not os.path.exists(video_save_path):
+			success = self._download_video(item)
+			if not success:
+				return None
+
+		# Convert the video into mp3, and delete video if successful
+		success = self._extract_audio(video_save_path, audio_save_path)
+		if success:
+			os.remove(video_save_path)
+		else:
+			return None
+
+		return audio_save_path
+
+
+	def _download_video(self, item: VideoQueueItem) -> bool:
+		video_author = item.video_author
+		video_title  = item.video_title
+		video_url    = item.video_url
+
+		# Construct filepaths
+		video_filename = f"{video_author} - {video_title}.mp4"
+		video_save_path = os.path.join(self.target_dir, video_filename)
 
 		# Create a progress bar for just this file
 		pbar = tqdm(
@@ -138,11 +162,10 @@ class YoutubeDLAPI:
 				pbar.n = d["downloaded_bytes"]
 				pbar.refresh()
 
-
 		# Create new options with the save path template, and callback
 		options = dict(
 			self.downloader_options,
-			**{"outtmpl": save_path, "progress_hooks": [callback]})
+			**{"outtmpl": video_save_path, "progress_hooks": [callback]})
 
 		# Try downloading video!
 		try:
@@ -150,10 +173,23 @@ class YoutubeDLAPI:
 				ydl.download([video_url])
 		except youtube_dl.utils.DownloadError as e:
 			error_msg_raw = str(e).replace("\n", " ")
-			error_msg = f"Error downloading {url}: {error_msg_raw}"
+			error_msg = f"Error downloading {video_url}: {error_msg_raw}"
 			# print(error_msg)
 			self.error_msgs.append(error_msg)
-			return None
+			return False
 
 		pbar.close()
-		return save_path
+		return True
+
+
+	def _extract_audio(self, video_save_path, audio_save_path) -> bool:
+		videoclip = moviepy.editor.VideoFileClip(video_save_path)
+		audioclip = videoclip.audio
+
+		audioclip.write_audiofile(
+			audio_save_path,
+			verbose=False, logger=None) # Hide progress bar
+
+		audioclip.close()
+		videoclip.close()
+		return True
