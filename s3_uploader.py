@@ -56,7 +56,10 @@ class S3Uploader:
 					bucket.upload_fileobj(
 						Fileobj=fileobj,
 						Key=s3_key,
-						Callback=callback)
+						Callback=callback,
+						ExtraArgs={
+							"ContentType": "audio/mpeg",
+							"ACL": "public-read"})
 
 				# Close the file pbar, and update the main pbar counting files
 				file_pbar.close()
