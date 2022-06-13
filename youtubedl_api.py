@@ -187,8 +187,8 @@ class YoutubeDLAPI:
 		audioclip = videoclip.audio
 
 		audioclip.write_audiofile(
-			audio_save_path,
-			verbose=False, logger=None) # Hide progress bar
+			audio_save_path),
+			# verbose=False, logger=None) # Hide progress bar
 
 		audioclip.close()
 		videoclip.close()
